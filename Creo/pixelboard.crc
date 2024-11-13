@@ -1,0 +1,45 @@
+﻿  MODEL PIXELBOARD :
+ 
+
+  2 CIRCULAR REFERENCE LOOPS FOUND
+ 
+
+   LOOP #  1
+
+   Depth of loop is 5
+
+Feature number 19 (COPY GEOMETRY, id = 23502) 
+  in model SEITENPLATTE_2 refers to:
+
+Feature number 14 (EXTRUDE_4, id = 7242) 
+  in model DHT22-FLANSCH must follow after:
+
+Feature number 10 (COPY GEOMETRY, id = 6795) 
+  in model DHT22-FLANSCH refers to:
+
+Feature number 21 (CHAMFER_1, id = 23539) 
+  in model SEITENPLATTE_2 must follow after:
+
+Feature number 19 (COPY GEOMETRY, id = 23502) 
+  in model SEITENPLATTE_2 - circle closed.
+
+
+   LOOP #  2
+
+   Depth of loop is 5
+
+Feature number 19 (COPY GEOMETRY, id = 23502) 
+  in model SEITENPLATTE_2 refers to:
+
+Feature number 16 (PUBLISHED GEOMETRY, id = 7273) 
+  in model DHT22-FLANSCH must follow after:
+
+Feature number 10 (COPY GEOMETRY, id = 6795) 
+  in model DHT22-FLANSCH refers to:
+
+Feature number 21 (CHAMFER_1, id = 23539) 
+  in model SEITENPLATTE_2 must follow after:
+
+Feature number 19 (COPY GEOMETRY, id = 23502) 
+  in model SEITENPLATTE_2 - circle closed.
+

@@ -18,7 +18,7 @@ void TasterEntpreller::aktualisiere() {
     // Wenn die Entprellzeit abgelaufen ist und der Zustand sich stabilisiert hat
     if (millis() - letzteZeit > entprellZeit) {
         if (tasterStatus && !istGedrueckt) {
-            // Taster wurde gerade gedrückt, Zeitpunkt speichern
+            // Taster wurde gerade gedrückt, Zeitpunkt speichernn
             gedruecktZeitpunkt = millis();
         }
         istGedrueckt = tasterStatus;

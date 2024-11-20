@@ -3,7 +3,7 @@
 class TasterEntpreller {
 private:
     const int pin;
-    bool istGedrueckt = false;           // Aktueller Zustand des Tasters
+    bool istGedrueckt = false;           // Aktueller Zustand des Tasterss
     bool langerDruckErkannt = false;     // Flag für langen Druck
     unsigned long gedruecktZeitpunkt = 0; // Zeitpunkt des Drückens
     const unsigned long entprellZeit = 50; // Entprellzeit in Millisekunden
@@ -40,6 +40,10 @@ public:
             langerDruckErkannt = true;   // Langer Druck erkannt, um Mehrfachausgabe zu verhindern
         }
     }
+
+    bool istGedruecktJetzt() {
+        return istGedrueckt;
+    }
 };
 
 // Pin für den Taster
@@ -54,4 +58,11 @@ void setup() {
 
 void loop() {
     taster.aktualisiere();  // Aktualisiere den Tasterstatus in jeder Schleife
+
+    // Gib IMMER aus, wenn der Taster gedrückt ist (egal ob kurz oder lang)
+    if (taster.istGedruecktJetzt()) {
+        Serial.println("Taster ist gerade gedrückt!");
+    }
+
+    delay(100);  // Kleine Verzögerung zur Reduzierung der Ausgabefrequenz
 }

@@ -31,7 +31,7 @@ Feature number 19 (COPY GEOMETRY, id = 23502)
 Feature number 19 (COPY GEOMETRY, id = 23502) 
   in model SEITENPLATTE_2 refers to:
 
-Feature number 16 (PUBLISHED GEOMETRY, id = 7273) 
+Feature number 17 (PUBLISHED GEOMETRY, id = 7273) 
   in model DHT22-FLANSCH must follow after:
 
 Feature number 10 (COPY GEOMETRY, id = 6795) 

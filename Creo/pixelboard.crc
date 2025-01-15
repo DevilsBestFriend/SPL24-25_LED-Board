@@ -17,7 +17,7 @@ Feature number 14 (EXTRUDE_4, id = 7242)
 Feature number 10 (COPY GEOMETRY, id = 6795) 
   in model DHT22-FLANSCH refers to:
 
-Feature number 21 (CHAMFER_1, id = 23539) 
+Feature number 20 (SOLIDIFY_4, id = 23522) 
   in model SEITENPLATTE_2 must follow after:
 
 Feature number 19 (COPY GEOMETRY, id = 23502) 
@@ -37,7 +37,7 @@ Feature number 17 (PUBLISHED GEOMETRY, id = 7273)
 Feature number 10 (COPY GEOMETRY, id = 6795) 
   in model DHT22-FLANSCH refers to:
 
-Feature number 21 (CHAMFER_1, id = 23539) 
+Feature number 20 (SOLIDIFY_4, id = 23522) 
   in model SEITENPLATTE_2 must follow after:
 
 Feature number 19 (COPY GEOMETRY, id = 23502) 

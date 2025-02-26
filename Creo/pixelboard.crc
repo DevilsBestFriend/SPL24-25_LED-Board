@@ -17,8 +17,8 @@ KE-Nummer 14 (PROFIL_4, ID = 7242)
 KE-Nummer 10 (KOPIE-GEOMETRIE, ID = 6795) 
   in Modell DHT22-FLANSCH verweist auf:
 
-KE-Nummer 21 (FASE_1, ID = 23539) 
-  in Modell SEITENPLATTE_2 muss folgen nach:
+Feature number 20 (SOLIDIFY_4, id = 23522) 
+  in model SEITENPLATTE_2 must follow after:
 
 KE-Nummer 19 (KOPIE-GEOMETRIE, ID = 23502) 
   in Modell SEITENPLATTE_2 - Kreis geschlossen.
@@ -37,8 +37,8 @@ KE-Nummer 17 (PUBLIZIERTE GEOMETRIE, ID = 7273)
 KE-Nummer 10 (KOPIE-GEOMETRIE, ID = 6795) 
   in Modell DHT22-FLANSCH verweist auf:
 
-KE-Nummer 21 (FASE_1, ID = 23539) 
-  in Modell SEITENPLATTE_2 muss folgen nach:
+Feature number 20 (SOLIDIFY_4, id = 23522) 
+  in model SEITENPLATTE_2 must follow after:
 
 KE-Nummer 19 (KOPIE-GEOMETRIE, ID = 23502) 
   in Modell SEITENPLATTE_2 - Kreis geschlossen.

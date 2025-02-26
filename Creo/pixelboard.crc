@@ -1,45 +1,45 @@
-﻿  MODEL PIXELBOARD :
+﻿  Modell PIXELBOARD: 
  
 
-  2 CIRCULAR REFERENCE LOOPS FOUND
+  2 Zirkulärer-Bezug-Schleifen gefunden
  
 
-   LOOP #  1
+   Schleife Nr. 1
 
-   Depth of loop is 5
+   Schleifentiefe beträgt 5
 
-Feature number 19 (COPY GEOMETRY, id = 23502) 
-  in model SEITENPLATTE_2 refers to:
+KE-Nummer 19 (KOPIE-GEOMETRIE, ID = 23502) 
+  in Modell SEITENPLATTE_2 verweist auf:
 
-Feature number 14 (EXTRUDE_4, id = 7242) 
-  in model DHT22-FLANSCH must follow after:
+KE-Nummer 14 (PROFIL_4, ID = 7242) 
+  in Modell DHT22-FLANSCH muss folgen nach:
 
-Feature number 10 (COPY GEOMETRY, id = 6795) 
-  in model DHT22-FLANSCH refers to:
+KE-Nummer 10 (KOPIE-GEOMETRIE, ID = 6795) 
+  in Modell DHT22-FLANSCH verweist auf:
 
-Feature number 21 (CHAMFER_1, id = 23539) 
-  in model SEITENPLATTE_2 must follow after:
+KE-Nummer 21 (FASE_1, ID = 23539) 
+  in Modell SEITENPLATTE_2 muss folgen nach:
 
-Feature number 19 (COPY GEOMETRY, id = 23502) 
-  in model SEITENPLATTE_2 - circle closed.
+KE-Nummer 19 (KOPIE-GEOMETRIE, ID = 23502) 
+  in Modell SEITENPLATTE_2 - Kreis geschlossen.
 
 
-   LOOP #  2
+   Schleife Nr. 2
 
-   Depth of loop is 5
+   Schleifentiefe beträgt 5
 
-Feature number 19 (COPY GEOMETRY, id = 23502) 
-  in model SEITENPLATTE_2 refers to:
+KE-Nummer 19 (KOPIE-GEOMETRIE, ID = 23502) 
+  in Modell SEITENPLATTE_2 verweist auf:
 
-Feature number 17 (PUBLISHED GEOMETRY, id = 7273) 
-  in model DHT22-FLANSCH must follow after:
+KE-Nummer 17 (PUBLIZIERTE GEOMETRIE, ID = 7273) 
+  in Modell DHT22-FLANSCH muss folgen nach:
 
-Feature number 10 (COPY GEOMETRY, id = 6795) 
-  in model DHT22-FLANSCH refers to:
+KE-Nummer 10 (KOPIE-GEOMETRIE, ID = 6795) 
+  in Modell DHT22-FLANSCH verweist auf:
 
-Feature number 21 (CHAMFER_1, id = 23539) 
-  in model SEITENPLATTE_2 must follow after:
+KE-Nummer 21 (FASE_1, ID = 23539) 
+  in Modell SEITENPLATTE_2 muss folgen nach:
 
-Feature number 19 (COPY GEOMETRY, id = 23502) 
-  in model SEITENPLATTE_2 - circle closed.
+KE-Nummer 19 (KOPIE-GEOMETRIE, ID = 23502) 
+  in Modell SEITENPLATTE_2 - Kreis geschlossen.
 

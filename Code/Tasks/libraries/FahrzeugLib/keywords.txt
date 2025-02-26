@@ -1,0 +1,24 @@
+#######################################
+# Syntax Coloring Map Servo
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+CMotor	KEYWORD1
+CAntrieb	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+Bewegen	KEYWORD2
+Stop	KEYWORD2
+Gerade	KEYWORD2
+Kurve	KEYWORD2
+Stop	KEYWORD2
+Wende	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################

@@ -1,46 +1,70 @@
-#include "esp32-hal-gpio.h"
-// Klasse_Taster.cpp
-#include "Klasse_Taster.h"
+class Taster {
+private:
+    int pin;
+    bool aktuellerZustand;
+    bool vorherigerZustand;
+    unsigned long gedruecktStartZeit;
+    unsigned long entprellZeit;
+    bool wurdeGedruecktFlag;
+    bool wurdeLangeGedruecktFlag;
+    const unsigned long langeDruckSchwelle = 1000; // 1 Sekunde
 
-TasterEntpreller::TasterEntpreller(int pin) : pin(pin), letzteZeit(0), gedruecktZeitpunkt(0) {
-    pinMode(pin, INPUT_PULLUP);
-}
-
-void TasterEntpreller::aktualisiere() {
-    // Tasterzustand lesen
-    bool tasterStatus = !digitalRead(pin); // invertiert, da Pullup-Widerstand verwendet wird
-
-    // Wenn sich der Tasterzustand ändert, Zeit speichern
-    if (tasterStatus != istGedrueckt) {
-        letzteZeit = millis();
+public:
+    Taster(int tasterPin) : pin(tasterPin), aktuellerZustand(false), vorherigerZustand(false),
+                            gedruecktStartZeit(0), entprellZeit(50), 
+                            wurdeGedruecktFlag(false), wurdeLangeGedruecktFlag(false) {
+        pinMode(pin, INPUT);
     }
 
+<<<<<<< HEAD
     // Wenn die Entprellzeit abgelaufen ist und der Zustand sich stabilisiert hat
     if (millis() - letzteZeit > entprellZeit) {
         if (tasterStatus && !istGedrueckt) {
             // Taster wurde gerade gedrückt, Zeitpunkt speichernn
             gedruecktZeitpunkt = millis();
+=======
+    void aktualisiere() {
+        bool gelesen = digitalRead(pin);
+        if (gelesen != aktuellerZustand) {
+            if (millis() - gedruecktStartZeit >= entprellZeit) {
+                vorherigerZustand = aktuellerZustand;
+                aktuellerZustand = gelesen;
+
+                if (aktuellerZustand) { // Taster wird gedrückt
+                    gedruecktStartZeit = millis();
+                } else { // Taster wird losgelassen
+                    if (millis() - gedruecktStartZeit >= langeDruckSchwelle) {
+                        wurdeLangeGedruecktFlag = true;
+                    } else {
+                        wurdeGedruecktFlag = true;
+                    }
+                }
+            }
+        } else {
+            if (aktuellerZustand && (millis() - gedruecktStartZeit >= langeDruckSchwelle)) {
+                wurdeLangeGedruecktFlag = true;
+            }
+>>>>>>> f7c4a6a67c622cf01bf06e58d66bd610d196010e
         }
-        istGedrueckt = tasterStatus;
     }
-}
 
-bool TasterEntpreller::istGedruecktJetzt() {
-    return istGedrueckt;
-}
-
-bool TasterEntpreller::wurdeGedrueckt() {
-    // Prüfen, ob der Taster gerade losgelassen wurde (Flankenerkennung)
-    if (!istGedrueckt && !digitalRead(pin)) { 
-        return true;
+    bool istGedrueckt() {
+        return aktuellerZustand;
     }
-    return false;
-}
 
-bool TasterEntpreller::wurdeLangGedrueckt() {
-    // Prüfen, ob der Taster länger als 1 Sekunde gedrückt wurde
-    if (istGedrueckt && (millis() - gedruecktZeitpunkt >= langDruckDauer)) {
-        return true;
+    bool wurdeGedrueckt() {
+        if (wurdeGedruecktFlag) {
+            wurdeGedruecktFlag = false; // Zurücksetzen
+            return true;
+        }
+        return false;
     }
-    return false;
-}
+
+    bool wurdeLangeGedrueckt() {
+        if (wurdeLangeGedruecktFlag) {
+            wurdeLangeGedruecktFlag = false; // Zurücksetzen
+            return true;
+        }
+        return false;
+    }
+};

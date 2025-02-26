@@ -16,6 +16,13 @@ public:
         pinMode(pin, INPUT);
     }
 
+<<<<<<< HEAD
+    // Wenn die Entprellzeit abgelaufen ist und der Zustand sich stabilisiert hat
+    if (millis() - letzteZeit > entprellZeit) {
+        if (tasterStatus && !istGedrueckt) {
+            // Taster wurde gerade gedrückt, Zeitpunkt speichernn
+            gedruecktZeitpunkt = millis();
+=======
     void aktualisiere() {
         bool gelesen = digitalRead(pin);
         if (gelesen != aktuellerZustand) {
@@ -37,6 +44,7 @@ public:
             if (aktuellerZustand && (millis() - gedruecktStartZeit >= langeDruckSchwelle)) {
                 wurdeLangeGedruecktFlag = true;
             }
+>>>>>>> f7c4a6a67c622cf01bf06e58d66bd610d196010e
         }
     }
 

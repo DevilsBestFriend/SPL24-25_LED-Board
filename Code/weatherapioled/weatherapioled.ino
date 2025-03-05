@@ -1,9 +1,9 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <Wire.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <Adafruit_NeoMatrix.h>
+#include <Adafruit_NeoPixel.h>
 
 // WLAN-Zugangsdaten
 const char* ssid = "iPhone von David";
@@ -14,11 +14,13 @@ const char* apiKey = "e2a048c7adfe57f26a2f98a7790eb912";
 const char* city = "Innsbruck,AT";
 String apiUrl = "http://api.openweathermap.org/data/2.5/weather?q=" + String(city) + "&units=metric&appid=" + String(apiKey);
 
-// OLED-Display Einstellungen
-#define SCREEN_WIDTH 32
-#define SCREEN_HEIGHT 8
-#define OLED_RESET -1
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+// LED-Matrix Einstellungen
+#define PIN 6  // Daten-Pin für die LED-Matrix
+#define MATRIX_WIDTH 32
+#define MATRIX_HEIGHT 8
+#define MATRIX_TYPE NEO_MATRIX_TOP + NEO_MATRIX_LEFT + NEO_MATRIX_ROWS + NEO_MATRIX_PROGRESSIVE
+
+Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(MATRIX_WIDTH, MATRIX_HEIGHT, PIN, MATRIX_TYPE, NEO_GRB + NEO_KHZ800);
 
 // Wetterdaten
 float temperature = 0.0;
@@ -79,54 +81,49 @@ void fetchWeatherData(void *pvParameters) {
   }
 }
 
-// OLED-Display aktualisieren
+// LED-Matrix aktualisieren
 void updateDisplay(void *pvParameters) {
   Serial.println("Display Task gestartet");
-
+  
   while (1) {
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
+    matrix.fillScreen(0);
+    matrix.setCursor(0, 0);
+    matrix.setTextColor(matrix.Color(0, 255, 0));
+    matrix.setTextSize(1);
 
-    display.println("Wetter in Innsbruck");
-    display.print("Temp: ");
-    display.print(temperature);
-    display.println(" C");
+    matrix.print("Temp: ");
+    matrix.print(temperature);
+    matrix.print("C");
+    matrix.show();
+    delay(3000);
     
-    display.print("Wetter: ");
-    display.println(weatherDescription);
-    
-    display.print("Luft: ");
-    display.print(humidity);
-    display.println("%");
+    matrix.fillScreen(0);
+    matrix.setCursor(0, 0);
+    matrix.setTextColor(matrix.Color(255, 255, 0));
+    matrix.print("Luft: ");
+    matrix.print(humidity);
+    matrix.print("%");
+    matrix.show();
+    delay(3000);
 
-    display.print("Wind: ");
-    display.print(windSpeed);
-    display.println(" m/s");
-
-    display.display();
-    
-    vTaskDelay(5000 / portTICK_PERIOD_MS); // Alle 5 Sekunden aktualisieren
+    matrix.fillScreen(0);
+    matrix.setCursor(0, 0);
+    matrix.setTextColor(matrix.Color(0, 0, 255));
+    matrix.print("Wind: ");
+    matrix.print(windSpeed);
+    matrix.print("m/s");
+    matrix.show();
+    delay(3000);
   }
 }
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  
-  // OLED-Display initialisieren
-  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println("SSD1306-Display nicht gefunden!");
-    while (1);
-  }
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println("Starte...");
-  display.display();
-  delay(2000);
+
+  matrix.begin();
+  matrix.setTextWrap(false);
+  matrix.setBrightness(10);  // Helligkeit anpassen
   
   connectToWiFi();
 

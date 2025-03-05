@@ -15,7 +15,7 @@ const char* city = "Innsbruck,AT";
 String apiUrl = "http://api.openweathermap.org/data/2.5/weather?q=" + String(city) + "&units=metric&appid=" + String(apiKey);
 
 // LED-Matrix Einstellungen
-#define PIN 6  // Daten-Pin für die LED-Matrix
+#define PIN 25  // Daten-Pin für die LED-Matrix
 #define MATRIX_WIDTH 32
 #define MATRIX_HEIGHT 8
 #define MATRIX_TYPE NEO_MATRIX_TOP + NEO_MATRIX_LEFT + NEO_MATRIX_ROWS + NEO_MATRIX_PROGRESSIVE

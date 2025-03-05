@@ -7,7 +7,7 @@
 #define COLOR_ORDER    GRB
 #define CHIPSET        WS2812B
 
-#define MATRIX_WIDTH   36
+#define MATRIX_WIDTH   32
 #define MATRIX_HEIGHT  8
 #define MATRIX_TYPE    VERTICAL_ZIGZAG_MATRIX
 

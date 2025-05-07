@@ -3,7 +3,7 @@
 #include <LEDText.h>
 #include <FontMatrise.h>
 
-#define LED_PIN        25
+#define LED_PIN        26
 #define COLOR_ORDER    GRB
 #define CHIPSET        WS2812B
 

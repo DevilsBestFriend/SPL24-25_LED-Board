@@ -1,85 +1,80 @@
-#include <FastLED.h>    // Include this first
-#include <LEDMatrix.h>  // Then include this
+/**
+ * LED-Matrix-Steuerung für SPL24-25_LED-Board
+ * 2 Panels à 32x8: oben an P25 (gespiegelt), unten an P26
+ * Gemeinsames Mapping zu 32x16-Matrix
+ */
 
-#define NUM_LEDS 512
-#define DATA_PIN 25
-#define SizeX 32
-#define SizeY 16
-#define MATRIX_WIDTH 32
-#define MATRIX_HEIGHT 8
-#define MATRIX_TYPE VERTICAL_ZIGZAG_MATRIX
+#include <FastLED.h>
 
-// Define LED array
-CRGB leds_array[NUM_LEDS];
-cLEDMatrix<-MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX_TYPE> leds;
+#define MATRIX_WIDTH     32
+#define MATRIX_HEIGHT    16
+#define COLOR_ORDER      GRB
+#define CHIPSET          WS2812
+#define BRIGHTNESS       64
 
-// Function to assign a color to a specific LED
-int mapXY(int x, int y) {
-    int led;
-    if (y < 8) {
-        led = x * 8;
-        if ((x % 2) == 0) {
-            led += y;
-        } else {
-            led += 7 - y;
-        }
-    } else {
-        led = 8 * x + 32 * 8;
-        if ((x % 2) == 0) {
-            led += y - 8;
-        } else {
-            led += 7 - (y - 8);
-        }
-    }
-    return led;
+// Pins für obere und untere Panels
+#define DATA_PIN_OBEN    25  // P25
+#define DATA_PIN_UNTEN   26  // P26
+
+// Gesamtanzahl LEDs pro Panel
+#define NUM_LEDS_PANEL   (MATRIX_WIDTH * 8)
+#define NUM_LEDS_TOTAL   (NUM_LEDS_PANEL * 2)
+
+// LED-Arrays für beide Panels
+CRGB ledsOben[NUM_LEDS_PANEL];
+CRGB ledsUnten[NUM_LEDS_PANEL];
+
+// Mapping-Funktion für 32x16-Koordinaten
+CRGB& getPixel(int x, int y) {
+  // Bereich prüfen
+  if (x < 0 || x >= MATRIX_WIDTH || y < 0 || y >= MATRIX_HEIGHT) {
+    static CRGB dummy;
+    return dummy;
+  }
+
+  // Unteres Panel
+  if (y < 8) {
+    int realY = y;
+    int index = x * 8;
+
+    if (x % 2 == 0)
+      index += realY;
+    else
+      index += 7 - realY;
+
+    return ledsUnten[index];
+  }
+
+  // Oberes Panel (Y gespiegelte Logik!)
+  else {
+    int realY = y - 8;
+    int index = x * 8;
+
+    if (x % 2 == 0)
+      index += 7 - realY;
+    else
+      index += realY;
+
+    return ledsOben[index];
+  }
 }
 
 void setup() {
-    // Initialize FastLED
-    FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds_array, NUM_LEDS);
-    FastLED.setBrightness(50); // Set brightness to 50/255
-    leds.SetLEDArray(leds_array);
-    
-    // Clear all LEDs
-    FastLED.clear();
-    FastLED.show();
-    
-    delay(1000); // Wait a second before starting
+  FastLED.addLeds<CHIPSET, DATA_PIN_UNTEN, COLOR_ORDER>(ledsUnten, NUM_LEDS_PANEL);
+  FastLED.addLeds<CHIPSET, DATA_PIN_OBEN,  COLOR_ORDER>(ledsOben,  NUM_LEDS_PANEL);
+  FastLED.setBrightness(BRIGHTNESS);
+  FastLED.clear();
+
+  // Testmuster: Ecken + Mitte einfärben
+  getPixel(0, 0)      = CRGB::Red;      // unten links
+  getPixel(31, 0)     = CRGB::Green;    // unten rechts
+  getPixel(0, 15)     = CRGB::Blue;     // oben links
+  getPixel(31, 15)    = CRGB::Yellow;   // oben rechts
+  getPixel(16, 8)     = CRGB::White;    // Mitte
+
+  FastLED.show();
 }
 
 void loop() {
-    // Test mapXY by lighting up different positions with different colors
-    
-    // Clear all LEDs first
-    FastLED.clear();
-    
-    // Test corner positions (0,0) = Red
-    leds_array[mapXY(0, 0)] = CRGB(255, 0, 0);
-    
-    // Top right (31,0) = Green
-    leds_array[mapXY(31, 0)] = CRGB(0, 255, 0);
-    
-    // Bottom left (0,15) = Blue
-    leds_array[mapXY(0, 15)] = CRGB(0, 0, 255);
-    
-    // Bottom right (31,15) = Yellow
-    leds_array[mapXY(31, 15)] = CRGB(255, 255, 0);
-    
-    // Center (16,8) = Purple
-    leds_array[mapXY(16, 8)] = CRGB(128, 0, 128);
-    
-    // Pattern across the middle
-    for (int x = 0; x < 32; x += 4) {
-        leds_array[mapXY(x, 7)] = CRGB(255, 128, 0); // Orange
-    }
-    
-    // Pattern down the middle
-    for (int y = 0; y < 16; y += 4) {
-        leds_array[mapXY(16, y)] = CRGB(0, 255, 255); // Cyan
-    }
-    
-    // Show the updated LED colors
-    FastLED.show();
-    
-    delay(500); // Wait half a second before updating
+  // Keine Animation – statisches Testbild
 }

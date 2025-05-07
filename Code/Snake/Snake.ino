@@ -86,45 +86,39 @@ LedAddress mapXY(int x, int y) {
   return result;
 }
 
-
-
-
-
 // Read joystick input and update snake direction
 void readJoystick() {
-    // Read analog values from joystick
-    int xValue = analogRead(JOYSTICK_X_PIN);
-    int yValue = analogRead(JOYSTICK_Y_PIN);
-    
-    // On ESP32, analog read range is 0-4095
-    const int midPoint = 2048;  // Middle of the range
-    const int threshold = 1000;  // Threshold for considering a direction change
-    
-    // Determine new direction from joystick position
-    // Prevent 180-degree turns that would cause immediate game over
-    Direction newDirection = snakeDirection;
-    
-    // Check Y axis first (higher priority)
-    if (yValue < midPoint - threshold && snakeDirection != DOWN) {
-        newDirection = UP;
-    } else if (yValue > midPoint + threshold && snakeDirection != UP) {
-        newDirection = DOWN;
-    }
-    // Check X axis
-    else if (xValue > midPoint + threshold && snakeDirection != LEFT) {
-        newDirection = RIGHT;
-    } else if (xValue < midPoint - threshold && snakeDirection != RIGHT) {
-        newDirection = LEFT;
-    }
-    
-    snakeDirection = newDirection;
-    
-    // Check button press for game restart if game over
-    if (gameOver && digitalRead(JOYSTICK_BUTTON_PIN) == LOW) {
-        delay(200);  // Debounce
-        initGame();
-    }
+  int xValue = analogRead(JOYSTICK_X_PIN);
+  int yValue = analogRead(JOYSTICK_Y_PIN);
+
+  const int midPoint = 2048;
+  const int threshold = 1000;
+
+  Direction newDirection = snakeDirection;
+
+  // ACHTUNG: Hier ist die korrigierte Zuweisung
+  // Joystick nach oben → Y > mid → UP
+  // Joystick nach rechts → X > mid → RIGHT
+
+  if (yValue > midPoint + threshold && snakeDirection != LEFT) {
+    newDirection = RIGHT;
+  } else if (yValue < midPoint - threshold && snakeDirection != RIGHT) {
+    newDirection = LEFT;
+  } else if (xValue > midPoint + threshold && snakeDirection != DOWN) {
+    newDirection = UP;
+  } else if (xValue < midPoint - threshold && snakeDirection != UP) {
+    newDirection = DOWN;
+  }
+
+  snakeDirection = newDirection;
+
+  // Neustart bei Buttondruck
+  if (gameOver && digitalRead(JOYSTICK_BUTTON_PIN) == LOW) {
+    delay(200);  // Entprellen
+    initGame();
+  }
 }
+
 
 // Initialize the game
 void initGame() {
@@ -205,7 +199,7 @@ void checkCollision() {
         return;
     }
     
-    // Check self collision (start from 1 to skip head)
+    /*// Check self collision (start from 1 to skip head)
     for (int i = 1; i < snakeLength; i++) {
         if (headX == snakeX[i] && headY == snakeY[i]) {
             gameOver = true;
@@ -213,7 +207,7 @@ void checkCollision() {
             Serial.println(score);
             return;
         }
-    }
+    }*/
     
     // Check food collision
     if (headX == foodX && headY == foodY) {

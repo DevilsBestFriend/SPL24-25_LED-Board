@@ -3,8 +3,7 @@
 #include <ArduinoJson.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_NeoMatrix.h>
-#include <Adafruit_NeoPixel.h>
-
+#include <Adafruit_NeoPixel.h> 
 // WLAN-Zugangsdaten
 const char* ssid = "iPhone von David";
 const char* password = "Fortnite4life";
@@ -19,7 +18,6 @@ String apiUrl = "http://api.openweathermap.org/data/2.5/weather?q=" + String(cit
 #define MATRIX_WIDTH 32
 #define MATRIX_HEIGHT 8
 #define MATRIX_TYPE NEO_MATRIX_TOP + NEO_MATRIX_LEFT + NEO_MATRIX_ROWS + NEO_MATRIX_PROGRESSIVE
-
 Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(MATRIX_WIDTH, MATRIX_HEIGHT, PIN, MATRIX_TYPE, NEO_GRB + NEO_KHZ800);
 
 // Wetterdaten

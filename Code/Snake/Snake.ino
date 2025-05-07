@@ -52,33 +52,43 @@ int score = 0;
 // Modified function to assign a color to a specific LED
 // Returns a structure containing both the array and the position
 LedAddress mapXY(int x, int y) {
-    LedAddress result;
-    int led;
-    
-    if (y < 8) {
-        // Upper half of the matrix (Pin 25)
-        led = x * 8;
-        if ((x % 2) == 0) {
-            led += y;
-        } else {
-            led += 7 - y;
-        }
-        result.array = leds_upper;
-        result.index = led;
+  LedAddress result;
+  int led;
+
+  if (y < 8) {
+    // Unteres Panel (normale Ausrichtung)
+    led = x * 8;
+    if ((x % 2) == 0) {
+      led += y;
     } else {
-        // Lower half of the matrix (Pin 26)
-        led = x * 8;
-        if ((x % 2) == 0) {
-            led += (y - 8);
-        } else {
-            led += 7 - (y - 8);
-        }
-        result.array = leds_lower;
-        result.index = led;
+      led += 7 - y;
     }
-    
-    return result;
+
+    result.array = leds_lower;
+    result.index = led;
+
+  } else {
+    // Oberes Panel (180° gedreht: X und Y gespiegelt)
+    int flippedX = MATRIX_WIDTH - 1 - x;
+    int flippedY = 15 - y;  // oder: 7 - (y - 8)
+
+    led = flippedX * 8;
+    if ((flippedX % 2) == 0) {
+      led += flippedY;
+    } else {
+      led += 7 - flippedY;
+    }
+
+    result.array = leds_upper;
+    result.index = led;
+  }
+
+  return result;
 }
+
+
+
+
 
 // Read joystick input and update snake direction
 void readJoystick() {
@@ -330,6 +340,26 @@ void setup() {
     // Initialize the game
     initGame();
 }
+void debugVisualisierung() {
+  FastLED.clear();
+
+  for (int x = 0; x < MATRIX_WIDTH; x++) {
+    for (int y = 0; y < MATRIX_HEIGHT; y++) {
+      LedAddress addr = mapXY(x, y);
+
+      // Farbverlauf: Rot nach Blau über X, Helligkeit über Y
+      uint8_t r = map(x, 0, MATRIX_WIDTH - 1, 0, 255);
+      uint8_t g = 0;
+      uint8_t b = map(x, 0, MATRIX_WIDTH - 1, 255, 0);
+      uint8_t brightness = map(y, 0, MATRIX_HEIGHT - 1, 50, 255);
+
+      addr.array[addr.index] = CRGB(r, g, b).nscale8(brightness);
+    }
+  }
+
+  FastLED.show();
+}
+
 
 void loop() {
     // Read joystick
@@ -343,4 +373,5 @@ void loop() {
     
     // Small delay to stabilize
     delay(10);
+
 }

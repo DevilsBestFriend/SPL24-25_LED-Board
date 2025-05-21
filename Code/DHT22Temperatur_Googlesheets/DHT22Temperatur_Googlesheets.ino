@@ -34,11 +34,8 @@ const uint8_t sensorPin = 33;
 const uint8_t sensorTyp = DHT22;
 TemperaturSensor temperaturSensor(sensorPin, sensorTyp);
 
-unsigned long letzterZeitstempel = 0;
-const unsigned long intervall = 2000;  // 2 Sekunden
-
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   temperaturSensor.starten();
 
@@ -55,25 +52,20 @@ void setup() {
 }
 
 void loop() {
-  unsigned long aktuelleZeit = millis();
+  float temperatur = temperaturSensor.leseTemperatur();
 
-  if (aktuelleZeit - letzterZeitstempel >= intervall) {
-    letzterZeitstempel = aktuelleZeit;
-
-    float temperatur = temperaturSensor.leseTemperatur();
-
-    // Fehlerbehandlung
-    if (isnan(temperatur)) {
-      Serial.println("Fehler beim Lesen der Temperatur!");
-      return;
-    }
-
+  // Fehlerbehandlung
+  if (isnan(temperatur)) {
+    Serial.println("Fehler beim Lesen der Temperatur!");
+  } else {
     Serial.print("Temperatur: ");
     Serial.print(temperatur);
     Serial.println(" °C");
 
     sendeDaten(temperatur);
   }
+
+  delay(2000);  // 2 Sekunden warten
 }
 
 /*

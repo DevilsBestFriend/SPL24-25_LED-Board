@@ -23,8 +23,8 @@ private:
 };
 
 // WLAN-Zugangsdaten
-const char* wlanName = "zTLatte";
-const char* wlanPasswort = "yfbk69420";
+const char* wlanName = "iPhone von Hendrik";
+const char* wlanPasswort = "hst123456";
 
 // Webhook-URL (z. B. von IFTTT oder Google Script Web App)
 const char* webAppUrl =
@@ -41,7 +41,8 @@ void setup() {
 
   WiFi.begin(wlanName, wlanPasswort);
 
-  Serial.print("Verbinde mit WLAN...");
+  Serial.println("\nVerbinde mit WLAN...");
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");

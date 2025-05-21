@@ -1,44 +1,44 @@
-#include <FastLED.h>    // Include this first
-#include <LEDMatrix.h>  // Then include this
+#include <FastLED.h>
+#include <LEDMatrix.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
-// LED Matrix configuration
-#define NUM_LEDS_PER_STRIP 256   // 256 LEDs per strip (half of the total)
-#define DATA_PIN_UPPER 25        // Upper matrix pin
-#define DATA_PIN_LOWER 26        // Lower matrix pin
+// LED Matrix Konfiguration
+#define NUM_LEDS_PER_STRIP 256
+#define DATA_PIN_UPPER 25
+#define DATA_PIN_LOWER 26
 #define MATRIX_WIDTH 32
 #define MATRIX_HEIGHT 16
 #define MATRIX_TYPE VERTICAL_ZIGZAG_MATRIX
 
-// Joystick pins
+// Joystick Pins
 #define JOYSTICK_BUTTON_PIN 32
 #define JOYSTICK_X_PIN 34
 #define JOYSTICK_Y_PIN 35
 
-// Game constants
+// Spielkonstanten
 #define INITIAL_SNAKE_LENGTH 3
 #define MAX_SNAKE_LENGTH 100
-#define GAME_SPEED_INITIAL 300  // Delay in milliseconds
-#define GAME_SPEED_MIN 80       // Fastest game speed
+#define GAME_SPEED_INITIAL 400
+#define GAME_SPEED_MIN 80
 #define SPEED_INCREASE_PER_FOOD 10
 
-// Direction definitions
+// Richtung
 enum Direction { UP, RIGHT, DOWN, LEFT };
 
-// Define two separate LED arrays for upper and lower parts
+// LED Arrays
 CRGB leds_upper[NUM_LEDS_PER_STRIP];
 CRGB leds_lower[NUM_LEDS_PER_STRIP];
-
-// Keep the original LED array for compatibility
 CRGB leds_array[NUM_LEDS_PER_STRIP * 2];
-cLEDMatrix<-MATRIX_WIDTH, MATRIX_HEIGHT/2, MATRIX_TYPE> leds;
+cLEDMatrix<-MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX_TYPE> leds;
 
-// Structure to return both array pointer and index
+// Struktur für LED-Adresse
 struct LedAddress {
-    CRGB* array;    // Pointer to the array (upper or lower)
-    int index;      // Index within that array
+  CRGB* array;
+  int index;
 };
 
-// Game variables
+// Spielvariablen
 int snakeX[MAX_SNAKE_LENGTH];
 int snakeY[MAX_SNAKE_LENGTH];
 int snakeLength;
@@ -49,298 +49,210 @@ int gameSpeed;
 bool gameOver;
 int score = 0;
 
-// Modified function to assign a color to a specific LED
-// Returns a structure containing both the array and the position
+// Hilfsfunktion: Mappt (x,y) auf LED-Array und Index
 LedAddress mapXY(int x, int y) {
-    LedAddress result;
-    int led;
-    
-    if (y < 8) {
-        // Upper half of the matrix (Pin 25)
-        led = x * 8;
-        if ((x % 2) == 0) {
-            led += y;
-        } else {
-            led += 7 - y;
-        }
-        result.array = leds_upper;
-        result.index = led;
-    } else {
-        // Lower half of the matrix (Pin 26)
-        led = x * 8;
-        if ((x % 2) == 0) {
-            led += (y - 8);
-        } else {
-            led += 7 - (y - 8);
-        }
-        result.array = leds_lower;
-        result.index = led;
-    }
-    
-    return result;
+  LedAddress result;
+  int led;
+
+  if (y < 8) {
+    // Unteres Panel
+    led = x * 8;
+    if ((x % 2) == 0) led += y;
+    else led += 7 - y;
+    result.array = leds_lower;
+    result.index = led;
+  } else {
+    // Oberes Panel (gedreht)
+    int flippedX = MATRIX_WIDTH - 1 - x;
+    int flippedY = 15 - y;
+    led = flippedX * 8;
+    if ((flippedX % 2) == 0) led += flippedY;
+    else led += 7 - flippedY;
+    result.array = leds_upper;
+    result.index = led;
+  }
+  return result;
 }
 
-// Read joystick input and update snake direction
-void readJoystick() {
-    // Read analog values from joystick
-    int xValue = analogRead(JOYSTICK_X_PIN);
-    int yValue = analogRead(JOYSTICK_Y_PIN);
-    
-    // On ESP32, analog read range is 0-4095
-    const int midPoint = 2048;  // Middle of the range
-    const int threshold = 1000;  // Threshold for considering a direction change
-    
-    // Determine new direction from joystick position
-    // Prevent 180-degree turns that would cause immediate game over
-    Direction newDirection = snakeDirection;
-    
-    // Check Y axis first (higher priority)
-    if (yValue < midPoint - threshold && snakeDirection != DOWN) {
-        newDirection = UP;
-    } else if (yValue > midPoint + threshold && snakeDirection != UP) {
-        newDirection = DOWN;
-    }
-    // Check X axis
-    else if (xValue > midPoint + threshold && snakeDirection != LEFT) {
-        newDirection = RIGHT;
-    } else if (xValue < midPoint - threshold && snakeDirection != RIGHT) {
-        newDirection = LEFT;
-    }
-    
-    snakeDirection = newDirection;
-    
-    // Check button press for game restart if game over
-    if (gameOver && digitalRead(JOYSTICK_BUTTON_PIN) == LOW) {
-        delay(200);  // Debounce
-        initGame();
-    }
-}
-
-// Initialize the game
-void initGame() {
-    // Set initial snake position (center of the screen)
-    snakeLength = INITIAL_SNAKE_LENGTH;
-    for (int i = 0; i < snakeLength; i++) {
-        snakeX[i] = MATRIX_WIDTH / 2 - i;
-        snakeY[i] = MATRIX_HEIGHT / 2;
-    }
-    
-    // Set initial direction
-    snakeDirection = RIGHT;
-    
-    // Reset score
-    score = 0;
-    
-    // Generate first food
-    generateFood();
-    
-    // Set game speed
-    gameSpeed = GAME_SPEED_INITIAL;
-    
-    // Reset game state
-    gameOver = false;
-    
-    // Reset timer
-    lastMoveTime = millis();
-    
-    Serial.println("New game started");
-}
-
-// Move the snake according to current direction
-void moveSnake() {
-    // Only move if enough time has passed
-    if (millis() - lastMoveTime < gameSpeed || gameOver) {
-        return;
-    }
-    
-    lastMoveTime = millis();
-    
-    // Move body segments
-    for (int i = snakeLength - 1; i > 0; i--) {
-        snakeX[i] = snakeX[i-1];
-        snakeY[i] = snakeY[i-1];
-    }
-    
-    // Move head according to direction
-    switch (snakeDirection) {
-        case UP:
-            snakeY[0]--;
-            break;
-        case RIGHT:
-            snakeX[0]++;
-            break;
-        case DOWN:
-            snakeY[0]++;
-            break;
-        case LEFT:
-            snakeX[0]--;
-            break;
-    }
-    
-    // Check for collisions
-    checkCollision();
-}
-
-// Check for collisions with walls, self, or food
-void checkCollision() {
-    // Get head position
-    int headX = snakeX[0];
-    int headY = snakeY[0];
-    
-    // Check wall collision
-    if (headX < 0 || headX >= MATRIX_WIDTH || headY < 0 || headY >= MATRIX_HEIGHT) {
-        gameOver = true;
-        Serial.print("Game over! Final score: ");
-        Serial.println(score);
-        return;
-    }
-    
-    // Check self collision (start from 1 to skip head)
-    for (int i = 1; i < snakeLength; i++) {
-        if (headX == snakeX[i] && headY == snakeY[i]) {
-            gameOver = true;
-            Serial.print("Game over! Final score: ");
-            Serial.println(score);
-            return;
-        }
-    }
-    
-    // Check food collision
-    if (headX == foodX && headY == foodY) {
-        // Increase snake length
-        if (snakeLength < MAX_SNAKE_LENGTH) {
-            snakeLength++;
-        }
-        
-        // Increase score
-        score++;
-        
-        Serial.print("Food eaten! Score: ");
-        Serial.println(score);
-        
-        // Increase game speed
-        gameSpeed = max(GAME_SPEED_MIN, gameSpeed - SPEED_INCREASE_PER_FOOD);
-        
-        // Generate new food
-        generateFood();
-    }
-}
-
-// Generate food at a random position that's not on the snake
+// Zufälliges Essen generieren, nicht auf Schlange
 void generateFood() {
-    bool validPosition;
-    
-    do {
-        validPosition = true;
-        
-        // Generate random position
-        foodX = random(MATRIX_WIDTH);
-        foodY = random(MATRIX_HEIGHT);
-        
-        // Check if food position overlaps with snake
-        for (int i = 0; i < snakeLength; i++) {
-            if (foodX == snakeX[i] && foodY == snakeY[i]) {
-                validPosition = false;
-                break;
-            }
-        }
-    } while (!validPosition);
+  bool validPosition;
+  do {
+    validPosition = true;
+    foodX = random(MATRIX_WIDTH);
+    foodY = random(MATRIX_HEIGHT);
+    for (int i = 0; i < snakeLength; i++) {
+      if (foodX == snakeX[i] && foodY == snakeY[i]) {
+        validPosition = false;
+        break;
+      }
+    }
+  } while (!validPosition);
 }
 
-// Draw the game on the LED matrix
+// Initialisiert das Spiel
+void initGame() {
+  snakeLength = INITIAL_SNAKE_LENGTH;
+  for (int i = 0; i < snakeLength; i++) {
+    snakeX[i] = MATRIX_WIDTH / 2 - i;
+    snakeY[i] = MATRIX_HEIGHT / 2;
+  }
+  snakeDirection = RIGHT;
+  score = 0;
+  generateFood();
+  gameSpeed = GAME_SPEED_INITIAL;
+  gameOver = false;
+  lastMoveTime = millis();
+  Serial.println("New game started");
+}
+
+// Joystick einlesen und Richtung setzen (kein Neustart bei Button)
+void readJoystick() {
+  int xValue = analogRead(JOYSTICK_X_PIN);
+  int yValue = analogRead(JOYSTICK_Y_PIN);
+  const int midPoint = 2048;
+  const int threshold = 1000;
+  Direction newDirection = snakeDirection;
+
+  if (yValue > midPoint + threshold && snakeDirection != LEFT) newDirection = RIGHT;
+  else if (yValue < midPoint - threshold && snakeDirection != RIGHT) newDirection = LEFT;
+  else if (xValue > midPoint + threshold && snakeDirection != DOWN) newDirection = UP;
+  else if (xValue < midPoint - threshold && snakeDirection != UP) newDirection = DOWN;
+
+  snakeDirection = newDirection;
+}
+
+// Schlange bewegen und Kollision prüfen
+void moveSnake() {
+  if (millis() - lastMoveTime < gameSpeed || gameOver) return;
+  lastMoveTime = millis();
+
+  for (int i = snakeLength - 1; i > 0; i--) {
+    snakeX[i] = snakeX[i-1];
+    snakeY[i] = snakeY[i-1];
+  }
+
+  switch (snakeDirection) {
+    case UP:    snakeY[0]--; break;
+    case RIGHT: snakeX[0]++; break;
+    case DOWN:  snakeY[0]++; break;
+    case LEFT:  snakeX[0]--; break;
+  }
+
+  // Wandkollision
+  if (snakeX[0] < 0 || snakeX[0] >= MATRIX_WIDTH || snakeY[0] < 0 || snakeY[0] >= MATRIX_HEIGHT) {
+    gameOver = true;
+    Serial.print("Game over! Score: ");
+    Serial.println(score);
+    return;
+  }
+  // Selbstkollision
+  for (int i = 1; i < snakeLength; i++) {
+    if (snakeX[0] == snakeX[i] && snakeY[0] == snakeY[i]) {
+      gameOver = true;
+      Serial.print("Game over! Score: ");
+      Serial.println(score);
+      return;
+    }
+  }
+  // Essen gefunden
+  if (snakeX[0] == foodX && snakeY[0] == foodY) {
+    if (snakeLength < MAX_SNAKE_LENGTH) snakeLength++;
+    score++;
+    Serial.print("Food eaten! Score: ");
+    Serial.println(score);
+    gameSpeed = max(GAME_SPEED_MIN, gameSpeed - SPEED_INCREASE_PER_FOOD);
+    generateFood();
+  }
+}
+
+// Spiel zeichnen
 void drawGame() {
-    // Clear the matrix
-    FastLED.clear();
-    
-    // Draw snake
-    for (int i = 0; i < snakeLength; i++) {
-        if (snakeX[i] >= 0 && snakeX[i] < MATRIX_WIDTH && 
-            snakeY[i] >= 0 && snakeY[i] < MATRIX_HEIGHT) {
-            
-            LedAddress addr = mapXY(snakeX[i], snakeY[i]);
-            
-            // Head is white, body is green
-            if (i == 0) {
-                addr.array[addr.index] = CRGB(255, 255, 255); // White for head
-            } else {
-                // Create a gradient from head to tail
-                int brightness = map(i, 1, snakeLength-1, 200, 50);
-                addr.array[addr.index] = CRGB(0, brightness, 0); // Green gradient for body
-            }
+  FastLED.clear();
+
+  for (int i = 0; i < snakeLength; i++) {
+    if (snakeX[i] >= 0 && snakeX[i] < MATRIX_WIDTH && snakeY[i] >= 0 && snakeY[i] < MATRIX_HEIGHT) {
+      LedAddress addr = mapXY(snakeX[i], snakeY[i]);
+      if (i == 0) addr.array[addr.index] = CRGB::White;
+      else {
+        int brightness = map(i, 1, snakeLength - 1, 200, 50);
+        addr.array[addr.index] = CRGB(0, brightness, 0);
+      }
+    }
+  }
+
+  if (!gameOver) {
+    LedAddress addr = mapXY(foodX, foodY);
+    int brightness = 150 + 100 * sin(millis() / 200.0);
+    addr.array[addr.index] = CRGB(brightness, 0, 0);
+  }
+
+  if (gameOver) {
+    if ((millis() / 250) % 2 == 0) {
+      for (int i = 0; i < snakeLength; i++) {
+        if (snakeX[i] >= 0 && snakeX[i] < MATRIX_WIDTH && snakeY[i] >= 0 && snakeY[i] < MATRIX_HEIGHT) {
+          LedAddress addr = mapXY(snakeX[i], snakeY[i]);
+          addr.array[addr.index] = CRGB::Red;
         }
+      }
     }
-    
-    // Draw food (red)
-    if (!gameOver) {
-        LedAddress addr = mapXY(foodX, foodY);
-        
-        // Make food pulsate
-        int brightness = 150 + 100 * sin(millis() / 200.0);
-        addr.array[addr.index] = CRGB(brightness, 0, 0); // Pulsating red for food
-    }
-    
-    // If game over, flash the matrix
+  }
+
+  FastLED.show();
+}
+
+// FreeRTOS Task für Snake-Spiel
+void snakeTask(void *pvParameters) {
+  initGame();
+
+  while (1) {
+    readJoystick();
+    moveSnake();
+    drawGame();
+
     if (gameOver) {
-        if ((millis() / 250) % 2 == 0) {  // Flash every 250ms
-            for (int i = 0; i < snakeLength; i++) {
-                if (snakeX[i] >= 0 && snakeX[i] < MATRIX_WIDTH && 
-                    snakeY[i] >= 0 && snakeY[i] < MATRIX_HEIGHT) {
-                    
-                    LedAddress addr = mapXY(snakeX[i], snakeY[i]);
-                    addr.array[addr.index] = CRGB(255, 0, 0); // Red for game over
-                }
-            }
-        }
+      vTaskDelay(pdMS_TO_TICKS(3000)); // 3 Sekunden warten
+      initGame();
     }
-    
-    // Update the display
-    FastLED.show();
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
 }
 
 void setup() {
-    // Initialize Serial for debugging
-    Serial.begin(115200);
-    Serial.println("Snake Game starting...");
-    
-    // Initialize joystick pins
-    pinMode(JOYSTICK_BUTTON_PIN, INPUT_PULLUP);
-    pinMode(JOYSTICK_X_PIN, INPUT);
-    pinMode(JOYSTICK_Y_PIN, INPUT);
-    
-    // Initialize FastLED for both LED strips
-    FastLED.addLeds<WS2812B, DATA_PIN_UPPER, GRB>(leds_upper, NUM_LEDS_PER_STRIP);
-    FastLED.addLeds<WS2812B, DATA_PIN_LOWER, GRB>(leds_lower, NUM_LEDS_PER_STRIP);
-    FastLED.setBrightness(50); // Set brightness to 50/255
-    
-    // Map the upper and lower arrays to the global array for LEDMatrix library
-    for(int i = 0; i < NUM_LEDS_PER_STRIP; i++) {
-        leds_array[i] = leds_upper[i];
-        leds_array[i + NUM_LEDS_PER_STRIP] = leds_lower[i];
-    }
-    
-    leds.SetLEDArray(leds_array);
-    
-    // Clear all LEDs
-    FastLED.clear();
-    FastLED.show();
-    
-    // Initialize random number generator
-    randomSeed(analogRead(36)); // Use an unused analog pin
-    
-    // Initialize the game
-    initGame();
+  Serial.begin(115200);
+  pinMode(JOYSTICK_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(JOYSTICK_X_PIN, INPUT);
+  pinMode(JOYSTICK_Y_PIN, INPUT);
+
+  FastLED.addLeds<WS2812B, DATA_PIN_UPPER, GRB>(leds_upper, NUM_LEDS_PER_STRIP);
+  FastLED.addLeds<WS2812B, DATA_PIN_LOWER, GRB>(leds_lower, NUM_LEDS_PER_STRIP);
+  FastLED.setBrightness(50);
+
+  // LEDs für LEDMatrix verbinden
+  for (int i = 0; i < NUM_LEDS_PER_STRIP; i++) {
+    leds_array[i] = leds_lower[i];
+    leds_array[i + NUM_LEDS_PER_STRIP] = leds_upper[i];
+  }
+  leds.SetLEDArray(leds_array);
+
+  FastLED.clear();
+  FastLED.show();
+
+  randomSeed(analogRead(36));
+
+  // Snake Task auf Core 1 starten
+  xTaskCreatePinnedToCore(
+    snakeTask,
+    "SnakeTask",
+    4096,
+    NULL,
+    2,
+    NULL,
+    1
+  );
 }
 
 void loop() {
-    // Read joystick
-    readJoystick();
-    
-    // Move snake
-    moveSnake();
-    
-    // Draw the game
-    drawGame();
-    
-    // Small delay to stabilize
-    delay(10);
+  // leer, da FreeRTOS Task läuft
 }

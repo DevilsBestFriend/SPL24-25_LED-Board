@@ -23,12 +23,12 @@ private:
 };
 
 // WLAN-Zugangsdaten
-const char* wlanName = "DEIN_WIFI_NAME";
-const char* wlanPasswort = "DEIN_WIFI_PASSWORT";
+const char* wlanName = "zTLatte";
+const char* wlanPasswort = "yfbk69420";
 
 // Webhook-URL (z. B. von IFTTT oder Google Script Web App)
 const char* webAppUrl =
-  "";
+  "https://script.google.com/macros/s/AKfycbw7HoXQEsoIS8YQ29FizEQhf903ahI2iOmNgdAKw1pcOHSjS4KIFGk_WvB23RArKvmC/exec";
 
 const uint8_t sensorPin = 33;
 const uint8_t sensorTyp = DHT22;

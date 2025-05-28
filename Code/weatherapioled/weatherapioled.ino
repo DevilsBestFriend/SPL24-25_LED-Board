@@ -88,12 +88,13 @@ void drawChar(int index, int x, int y, CRGB color) {
   for (int row = 0; row < 5; row++) {
     for (int col = 0; col < 3; col++) {
       if ((font3x5[index][row] >> (2 - col)) & 0x01) {
-        LedAddress addr = mapXY(x + col, y + row);
+        LedAddress addr = mapXY(x + col, y + (4 - row));  // Y-Korrektur!
         addr.array[addr.index] = color;
       }
     }
   }
 }
+
 
 // Text anzeigen
 void drawText(String text, int x, int y, CRGB color) {

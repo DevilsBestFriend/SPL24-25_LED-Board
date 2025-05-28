@@ -23,8 +23,8 @@ private:
 };
 
 // WLAN-Zugangsdaten
-const char* wlanName = "iPhone von Hendrik";
-const char* wlanPasswort = "hst123456";
+const char* wlanName = "iPhone von David";
+const char* wlanPasswort = "Fortnite4life";
 
 // Webhook-URL
 const char* webAppUrl =

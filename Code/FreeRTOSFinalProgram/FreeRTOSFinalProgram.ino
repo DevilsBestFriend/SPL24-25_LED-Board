@@ -2,6 +2,9 @@
 #include <LEDMatrix.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <DHT.h>
 
 // LED Matrix Konfiguration
 #define NUM_LEDS_PER_STRIP 256
@@ -16,7 +19,45 @@
 #define JOYSTICK_X_PIN 34
 #define JOYSTICK_Y_PIN 35
 
-#define TASK_DELAY 10
+const byte font5x7[][5] = {
+  {0x7E, 0x11, 0x11, 0x11, 0x7E}, // A
+  {0x7F, 0x49, 0x49, 0x49, 0x36}, // B
+  {0x3E, 0x41, 0x41, 0x41, 0x22}, // C
+  {0x7F, 0x41, 0x41, 0x22, 0x1C}, // D
+  {0x7F, 0x49, 0x49, 0x49, 0x41}, // E
+  {0x7F, 0x09, 0x09, 0x09, 0x01}, // F
+  {0x3E, 0x41, 0x49, 0x49, 0x7A}, // G
+  {0x7F, 0x08, 0x08, 0x08, 0x7F}, // H
+  {0x00, 0x41, 0x7F, 0x41, 0x00}, // I
+  {0x20, 0x40, 0x41, 0x3F, 0x01}, // J
+  {0x7F, 0x08, 0x14, 0x22, 0x41}, // K
+  {0x7F, 0x40, 0x40, 0x40, 0x40}, // L
+  {0x7F, 0x02, 0x04, 0x02, 0x7F}, // M
+  {0x7F, 0x04, 0x08, 0x10, 0x7F}, // N
+  {0x3E, 0x41, 0x41, 0x41, 0x3E}, // O
+  {0x7F, 0x09, 0x09, 0x09, 0x06}, // P
+  {0x3E, 0x41, 0x51, 0x21, 0x5E}, // Q
+  {0x7F, 0x09, 0x19, 0x29, 0x46}, // R
+  {0x46, 0x49, 0x49, 0x49, 0x31}, // S
+  {0x01, 0x01, 0x7F, 0x01, 0x01}, // T
+  {0x3F, 0x40, 0x40, 0x40, 0x3F}, // U
+  {0x1F, 0x20, 0x40, 0x20, 0x1F}, // V
+  {0x7F, 0x20, 0x10, 0x20, 0x7F}, // W
+  {0x63, 0x14, 0x08, 0x14, 0x63}, // X
+  {0x03, 0x04, 0x78, 0x04, 0x03}, // Y
+  {0x61, 0x51, 0x49, 0x45, 0x43}, // Z
+  {0x00, 0x00, 0x00, 0x00, 0x00}, // SPACE
+};
+// DHT-Sensor
+#define SENSOR_PIN 33
+#define SENSOR_TYP DHT22
+
+// WLAN-Zugangsdaten
+const char* wlanName = "iPhone von David";
+const char* wlanPasswort = "Fortnite4life";
+
+// Webhook-URL
+const char* webAppUrl = "https://script.google.com/macros/s/AKfycbw7HoXQEsoIS8YQ29FizEQhf903ahI2iOmNgdAKw1pcOHSjS4KIFGk_WvB23RArKvmC/exec";
 
 // Richtung
 enum Direction { UP, RIGHT, DOWN, LEFT };
@@ -27,14 +68,18 @@ CRGB leds_lower[NUM_LEDS_PER_STRIP];
 CRGB leds_array[NUM_LEDS_PER_STRIP * 2];
 cLEDMatrix<-MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX_TYPE> leds;
 
-// Globale Spielflags
-volatile int currentTask = 0;  // 0 = Snake, 1 = Testanimation
-
-// Struktur für LED-Adresse
-struct LedAddress {
-  CRGB* array;
-  int index;
+// Temperaturklasse
+class TemperaturSensor {
+public:
+  TemperaturSensor(uint8_t pin, uint8_t typ) : dht(pin, typ) {}
+  void starten() { dht.begin(); }
+  float leseTemperatur() { return dht.readTemperature(); }
+private:
+  DHT dht;
 };
+
+// Temperatur-Objekt jetzt nach Klassendefinition
+TemperaturSensor temperaturSensor(SENSOR_PIN, SENSOR_TYP);
 
 // Snake-Variablen
 int snakeX[100], snakeY[100];
@@ -46,7 +91,12 @@ int gameSpeed = 400;
 bool gameOver = false;
 int score = 0;
 
+// Task-Auswahl
+volatile int currentTask = 0;
+
 // Mapping-Funktion
+struct LedAddress { CRGB* array; int index; };
+
 LedAddress mapXY(int x, int y) {
   LedAddress result;
   int led;
@@ -64,7 +114,7 @@ LedAddress mapXY(int x, int y) {
   return result;
 }
 
-// Snake-Funktionen
+// Snake-Logik
 void generateFood() {
   bool valid;
   do {
@@ -160,9 +210,8 @@ void drawGame() {
   FastLED.show();
 }
 
-// === TASKS ===
-
-void snakeTask(void* pvParameters) {
+// Tasks
+void snakeTask(void* pv) {
   while (1) {
     if (currentTask == 0) {
       readJoystick();
@@ -170,36 +219,104 @@ void snakeTask(void* pvParameters) {
       drawGame();
       if (gameOver && millis() - lastMoveTime > 3000) initGame();
     }
-    vTaskDelay(pdMS_TO_TICKS(TASK_DELAY));
+    vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
 
-void altAnimationTask(void* pvParameters) {
-  while (1) {
-    if (currentTask == 1) {
-      for (int i = 0; i < NUM_LEDS_PER_STRIP * 2; i++) {
-        leds_array[i] = CRGB::Blue;
+void sendeDaten(float temperatur) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    String url = String(webAppUrl) + "?temperatur=" + temperatur;
+    http.begin(url);
+    int code = http.GET();
+    http.end();
+    Serial.printf("HTTP Status: %d\n", code);
+  }
+}
+
+void drawChar5x7(int x, int y, char c, CRGB color) {
+  if (c >= 'A' && c <= 'Z') {
+    const byte* bitmap = font5x7[c - 'A'];
+    for (int col = 0; col < 5; col++) {
+      byte column = bitmap[col];
+      for (int row = 0; row < 7; row++) {
+        if (column & (1 << row)) {
+  int drawX = x + col;
+  int drawY = y + (6 - row);
+
+  // Spiegelung horizontal rückgängig machen
+  drawX = MATRIX_WIDTH - 1 - drawX;
+
+  if (drawX >= 0 && drawX < MATRIX_WIDTH &&
+      drawY >= 0 && drawY < MATRIX_HEIGHT) {
+    LedAddress addr = mapXY(drawX, drawY);
+    addr.array[addr.index] = color;
+  }
+}
+
       }
-      FastLED.show();
     }
-    vTaskDelay(pdMS_TO_TICKS(TASK_DELAY));
   }
 }
 
-void joystickButtonTask(void* pvParameters) {
+
+void googleSheetsTask(void* pv) {
+  static int scrollOffset = MATRIX_WIDTH;
+
+  while (true) {
+    if (currentTask == 1) {
+      FastLED.clear();
+
+      const char* text = " GOOGLE SHEETS ";
+      int len = strlen(text);
+
+      for (int i = 0; i < len; i++) {
+        drawChar5x7(scrollOffset + i * 6, 0, text[i], CRGB::White);  // y=0: untere Hälfte
+      }
+
+      FastLED.show();
+
+      scrollOffset--;
+      if (scrollOffset < -len * 6) scrollOffset = MATRIX_WIDTH;
+
+      vTaskDelay(30 / portTICK_PERIOD_MS);  // ca. 33 FPS → flüssig & lesbar
+    } else {
+      vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+  }
+}
+
+
+
+void joystickTask(void* pv) {
   bool lastState = HIGH;
   while (1) {
     bool currentState = digitalRead(JOYSTICK_BUTTON_PIN);
     if (lastState == HIGH && currentState == LOW) {
-      currentTask = (currentTask + 1) % 2;
-      Serial.print("Switched to Task ");
+      currentTask = (currentTask + 1) % 2; // Snake ↔ Google Sheets
+      Serial.print("Wechsle zu Task ");
       Serial.println(currentTask);
-      delay(200); // Entprellung
+      delay(200);  // Entprellung
     }
     lastState = currentState;
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(50 / portTICK_PERIOD_MS);
   }
 }
+
+void taskWLAN(void* pv) {
+  WiFi.begin(wlanName, wlanPasswort);
+  Serial.println("WLAN verbinden...");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    vTaskDelay(500 / portTICK_PERIOD_MS);
+  }
+  Serial.println("\nWLAN verbunden!");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
+  vTaskDelete(NULL);
+}
+
+
 
 void setup() {
   Serial.begin(115200);
@@ -221,14 +338,15 @@ void setup() {
   FastLED.show();
   randomSeed(analogRead(36));
 
+  temperaturSensor.starten();
   initGame();
 
-  // FreeRTOS Tasks
-  xTaskCreate(snakeTask, "SnakeTask", 4096, NULL, 1, NULL);
-  xTaskCreate(altAnimationTask, "AltTask", 2048, NULL, 1, NULL);
-  xTaskCreate(joystickButtonTask, "JoystickTask", 1024, NULL, 2, NULL);
+  xTaskCreatePinnedToCore(snakeTask, "Snake", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(googleSheetsTask, "GoogleSheets", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(joystickTask, "Joystick", 2048, NULL, 2, NULL, 1);
+  xTaskCreatePinnedToCore(taskWLAN, "WLAN", 4096, NULL, 1, NULL, 0);
 }
 
 void loop() {
-  // leer; FreeRTOS übernimmt alles
+  // leer
 }

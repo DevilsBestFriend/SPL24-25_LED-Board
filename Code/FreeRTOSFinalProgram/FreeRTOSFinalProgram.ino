@@ -46,6 +46,17 @@ const byte font5x7[][5] = {
   {0x63, 0x14, 0x08, 0x14, 0x63}, // X
   {0x03, 0x04, 0x78, 0x04, 0x03}, // Y
   {0x61, 0x51, 0x49, 0x45, 0x43}, // Z
+  {0x3E, 0x51, 0x49, 0x45, 0x3E}, // 0
+  {0x00, 0x01, 0x7F, 0x21, 0x00}, // 1
+  {0x31, 0x49, 0x45, 0x43, 0x21}, // 2
+  {0x46, 0x69, 0x51, 0x41, 0x42}, // 3
+  {0x04, 0x7F, 0x24, 0x14, 0x0C}, // 4
+  {0x4E, 0x51, 0x51, 0x51, 0x72}, // 5
+  {0x06, 0x49, 0x49, 0x29, 0x1E}, // 6
+  {0x60, 0x50, 0x48, 0x47, 0x40}, // 7
+  {0x36, 0x49, 0x49, 0x49, 0x36}, // 8 (symmetrisch, keine Änderung nötig)
+  {0x3C, 0x4A, 0x49, 0x49, 0x30}, // 9
+  {0x63, 0x13, 0x08, 0x64, 0x63}, // %
   {0x00, 0x00, 0x00, 0x00, 0x00}, // SPACE
 };
 // DHT-Sensor
@@ -235,29 +246,45 @@ void sendeDaten(float temperatur) {
 }
 
 void drawChar5x7(int x, int y, char c, CRGB color) {
+  const byte* bitmap = nullptr;
+  int charIndex = -1;
+
   if (c >= 'A' && c <= 'Z') {
-    const byte* bitmap = font5x7[c - 'A'];
+    charIndex = c - 'A';                // A–Z → 0–25
+  } else if (c >= '0' && c <= '9') {
+    charIndex = 26 + (c - '0');         // 0–9 → 26–35
+  } else if (c == '%') {
+    charIndex = 36;                     // % → 36
+  } else if (c == ' ') {
+    charIndex = 37;                     // SPACE → 37
+  }
+
+  if (charIndex >= 0) {
+    bitmap = font5x7[charIndex];
+
     for (int col = 0; col < 5; col++) {
       byte column = bitmap[col];
       for (int row = 0; row < 7; row++) {
         if (column & (1 << row)) {
-  int drawX = x + col;
-  int drawY = y + (6 - row);
+          int drawX = x + col;
+          int drawY = y + (6 - row);  // ✅ vertikal gespiegelt, damit Zeichen unten starten
 
-  // Spiegelung horizontal rückgängig machen
-  drawX = MATRIX_WIDTH - 1 - drawX;
+          // ✅ horizontale Spiegelung (wie immer)
+          drawX = MATRIX_WIDTH - 1 - drawX;
 
-  if (drawX >= 0 && drawX < MATRIX_WIDTH &&
-      drawY >= 0 && drawY < MATRIX_HEIGHT) {
-    LedAddress addr = mapXY(drawX, drawY);
-    addr.array[addr.index] = color;
-  }
-}
-
+          if (drawX >= 0 && drawX < MATRIX_WIDTH &&
+              drawY >= 0 && drawY < MATRIX_HEIGHT) {
+            LedAddress addr = mapXY(drawX, drawY);
+            addr.array[addr.index] = color;
+          }
+        }
       }
     }
   }
 }
+
+
+
 
 
 void googleSheetsTask(void* pv) {
@@ -293,7 +320,7 @@ void joystickTask(void* pv) {
   while (1) {
     bool currentState = digitalRead(JOYSTICK_BUTTON_PIN);
     if (lastState == HIGH && currentState == LOW) {
-      currentTask = (currentTask + 1) % 2; // Snake ↔ Google Sheets
+      currentTask = (currentTask + 1) % 3;
       Serial.print("Wechsle zu Task ");
       Serial.println(currentTask);
       delay(200);  // Entprellung
@@ -306,15 +333,120 @@ void joystickTask(void* pv) {
 void taskWLAN(void* pv) {
   WiFi.begin(wlanName, wlanPasswort);
   Serial.println("WLAN verbinden...");
-  while (WiFi.status() != WL_CONNECTED) {
+
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
     Serial.print(".");
     vTaskDelay(500 / portTICK_PERIOD_MS);
+    attempts++;
   }
-  Serial.println("\nWLAN verbunden!");
-  Serial.print("IP: ");
-  Serial.println(WiFi.localIP());
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWLAN verbunden!");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\nWLAN NICHT verbunden!");
+  }
+
   vTaskDelete(NULL);
 }
+
+const char* weatherApiUrl =
+  "http://api.openweathermap.org/data/2.5/weather?q=Innsbruck&units=metric&appid=e2a048c7adfe57f26a2f98a7790eb912";
+
+// Dritter Task zur Wetteranzeige
+void weatherTask(void* pv) {
+  static unsigned long lastUpdate = 0;
+  static float temp = 0, humidity = 0, wind = 0;
+  static int scrollOffset = MATRIX_WIDTH;
+
+  while (true) {
+    if (currentTask == 2) {
+      Serial.println("Wettertask läuft!");
+
+      unsigned long now = millis();
+
+      if (now - lastUpdate > 60000 || lastUpdate == 0) {
+        if (WiFi.status() == WL_CONNECTED) {
+          HTTPClient http;
+          http.begin(weatherApiUrl);
+          int httpCode = http.GET();
+
+          Serial.printf("HTTP-Code: %d\n", httpCode);
+
+          if (httpCode == 200) {
+            String payload = http.getString();
+
+            // ⚠️ WICHTIG: JSON reparieren (Punkte → Kommas → Punkte)
+            payload.replace('.', ',');
+            payload.replace("\",\"", "\",\"");  // nur zur Sicherheit
+            payload.replace(',', '.');
+
+            Serial.println("Antwort:");
+            Serial.println(payload);
+
+            int tempIndex = payload.indexOf("\"temp\":");
+            int humIndex = payload.indexOf("\"humidity\":");
+            int windIndex = payload.indexOf("\"speed\":");
+
+            if (tempIndex != -1)
+              temp = payload.substring(tempIndex + 7).toFloat();
+
+            if (humIndex != -1) {
+              String humStr = payload.substring(humIndex + 10);
+              humidity = humStr.toFloat();
+              Serial.print("Humidity: ");
+              Serial.println(humidity);
+            }
+
+            if (windIndex != -1)
+              wind = payload.substring(windIndex + 8).toFloat();
+
+            Serial.printf("Temp: %.1f, Humidity: %.1f, Wind: %.1f\n",
+                          temp, humidity, wind);
+
+            lastUpdate = now;
+          } else {
+            Serial.println("Fehler beim API-Aufruf!");
+          }
+
+          http.end();
+        } else {
+          Serial.println("Keine WLAN-Verbindung.");
+        }
+      }
+
+      // 💡 Anzeige vorbereiten
+      char buffer[64];
+      snprintf(buffer, sizeof(buffer),
+               " T%.0fC H%.0f%% W%.0fm ", temp, humidity, wind);
+
+      Serial.print("Anzeige: ");
+      Serial.println(buffer);  // Debug
+
+      FastLED.clear();
+
+      int len = strlen(buffer);
+      for (int i = 0; i < len; i++) {
+        drawChar5x7(scrollOffset + i * 6, 0, buffer[i], CRGB::SkyBlue);
+      }
+
+      FastLED.show();
+
+      scrollOffset--;
+      if (scrollOffset < -len * 6) scrollOffset = MATRIX_WIDTH;
+
+      vTaskDelay(30 / portTICK_PERIOD_MS);
+    } else {
+      scrollOffset = MATRIX_WIDTH;
+      vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+  }
+}
+
+
+
 
 
 
@@ -345,7 +477,9 @@ void setup() {
   xTaskCreatePinnedToCore(googleSheetsTask, "GoogleSheets", 4096, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(joystickTask, "Joystick", 2048, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(taskWLAN, "WLAN", 4096, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(weatherTask, "Weather", 4096, NULL, 1, NULL, 1);
 }
+
 
 void loop() {
   // leer

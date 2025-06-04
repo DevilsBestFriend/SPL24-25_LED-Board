@@ -64,6 +64,8 @@ const byte font5x7[][5] = {
 #define SENSOR_TYP DHT22
 
 // WLAN-Zugangsdaten
+const char* wlanName = "iPhone von Hendrik";
+const char* wlanPasswort = "hst123456";
 
 // Webhook-URL
 const char* webAppUrl = "https://script.google.com/macros/s/AKfycbw7HoXQEsoIS8YQ29FizEQhf903ahI2iOmNgdAKw1pcOHSjS4KIFGk_WvB23RArKvmC/exec";
@@ -376,7 +378,6 @@ void weatherTask(void* pv) {
           if (httpCode == 200) {
             String payload = http.getString();
 
-            // ⚠️ WICHTIG: JSON reparieren (Punkte → Kommas → Punkte)
             payload.replace('.', ',');
             payload.replace("\",\"", "\",\"");  // nur zur Sicherheit
             payload.replace(',', '.');
@@ -403,7 +404,6 @@ void weatherTask(void* pv) {
 
             Serial.printf("Temp: %.1f, Humidity: %.1f, Wind: %.1f\n",
                           temp, humidity, wind);
-
             lastUpdate = now;
           } else {
             Serial.println("Fehler beim API-Aufruf!");
@@ -415,7 +415,6 @@ void weatherTask(void* pv) {
         }
       }
 
-      // 💡 Anzeige vorbereiten
       char buffer[64];
       snprintf(buffer, sizeof(buffer),
                " T%.0fC H%.0f%% W%.0fm ", temp, humidity, wind);

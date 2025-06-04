@@ -64,8 +64,6 @@ const byte font5x7[][5] = {
 #define SENSOR_TYP DHT22
 
 // WLAN-Zugangsdaten
-const char* wlanName = "iPhone von David";
-const char* wlanPasswort = "Fortnite4life";
 
 // Webhook-URL
 const char* webAppUrl = "https://script.google.com/macros/s/AKfycbw7HoXQEsoIS8YQ29FizEQhf903ahI2iOmNgdAKw1pcOHSjS4KIFGk_WvB23RArKvmC/exec";

@@ -4,6 +4,9 @@
 #include <FontMatrise.h>
 #include <WiFi.h>
 #include "time.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
 // WLAN-Zugangsdaten
 const char* ssid = "iPhone von Hendrik";
@@ -14,193 +17,170 @@ const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 3600; // GMT+1
 const int daylightOffset_sec = 3600; // Sommerzeit
 
-// Ändere die folgenden Defines, um deine Matrix anzupassen
-#define LED_PIN_UPPER   25  // Oberes Panel (Uhrzeit)
-#define LED_PIN_LOWER   26  // Unteres Panel (Datum)
+// Hardware-Konfiguration
+#define LED_PIN_UPPER   25
+#define LED_PIN_LOWER   26
 #define COLOR_ORDER     GRB
 #define CHIPSET         WS2812B
-
 #define MATRIX_WIDTH    32
 #define MATRIX_HEIGHT   8
 #define MATRIX_TYPE     VERTICAL_ZIGZAG_MATRIX
 
-// Zwei separate LED-Matrizen definieren
+// RTOS Einstellungen
+#define TASK_STACK_SIZE 4096
+#define PRIO_HIGH 3
+#define PRIO_NORMAL 2
+
+// Globale Objekte
 cLEDMatrix<MATRIX_WIDTH, -MATRIX_HEIGHT, MATRIX_TYPE> upperMatrix;
 cLEDMatrix<-MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX_TYPE> lowerMatrix;
-
-// Zwei separate Scrolling-Textobjekte
 cLEDText upperScrollingMsg;
 cLEDText lowerScrollingMsg;
 
-// Buffer für die anzuzeigenden Texte
-unsigned char upperTextBuffer[75]; // Für Uhrzeit
-unsigned char lowerTextBuffer[75]; // Für Datum
+// Shared Resources
+SemaphoreHandle_t xTextMutex;
+SemaphoreHandle_t xLEDMutex;
+unsigned char upperTextBuffer[75];
+unsigned char lowerTextBuffer[75];
 int upperTextLength = 0;
 int lowerTextLength = 0;
 
-// Timer für verschiedene Aktualisierungsintervalle
-unsigned long lastTimeUpdate = 0;
-unsigned long lastScrollUpdate = 0;
-const unsigned long timeUpdateInterval = 1000; // Zeitupdate jede Sekunde
-const unsigned long scrollUpdateInterval = 100; // Basis-Scrolling-Intervall
+// Für Scroll-Logik
+volatile bool upperNeedsUpdate = false;
+volatile bool lowerNeedsUpdate = false;
+char nextUpperText[75] = "";
+char nextLowerText[75] = "";
 
-// Variable zum Verfolgen der Scrollposition
-int upperScrollCount = 0;
-int lowerScrollCount = 0;
-int upperTextWidth = 0;
-int lowerTextWidth = 0;
-bool textNeedsUpdate = false;
+// Task Handles
+TaskHandle_t xTimeTaskHandle;
+TaskHandle_t xScrollTaskHandle;
+
+// --- Text aktualisieren (mit Mutex) ---
+void updateText(const char* upper, const char* lower) {
+  if(xSemaphoreTake(xTextMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    strlcpy((char*)upperTextBuffer, upper, sizeof(upperTextBuffer));
+    strlcpy((char*)lowerTextBuffer, lower, sizeof(lowerTextBuffer));
+    upperTextLength = strlen((char*)upperTextBuffer);
+    lowerTextLength = strlen((char*)lowerTextBuffer);
+
+    if(xSemaphoreTake(xLEDMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+      upperScrollingMsg.SetText(upperTextBuffer, upperTextLength);
+      lowerScrollingMsg.SetText(lowerTextBuffer, lowerTextLength);
+      xSemaphoreGive(xLEDMutex);
+    }
+    xSemaphoreGive(xTextMutex);
+  }
+}
+
+// --- Zeit-Task ---
+void timeTask(void *pvParameters) {
+  while(1) {
+    struct tm timeInfo;
+    if(getLocalTime(&timeInfo, 100)) {
+      char timeStr[32], dateStr[32];
+      strftime(timeStr, sizeof(timeStr), "%H:%M:%S", &timeInfo);
+      strftime(dateStr, sizeof(dateStr), "%d.%m.%Y", &timeInfo);
+
+      // Nächste Texte vorbereiten
+      snprintf(nextUpperText, sizeof(nextUpperText), "      %s", timeStr);
+      snprintf(nextLowerText, sizeof(nextLowerText), "      %s", dateStr);
+
+      // Markiere, dass nach dem nächsten Scrollzyklus aktualisiert werden soll
+      upperNeedsUpdate = true;
+      lowerNeedsUpdate = true;
+
+      // Debug-Ausgabe
+      Serial.print("Neue Uhrzeit: "); Serial.println(timeStr);
+      Serial.print("Neues Datum: "); Serial.println(dateStr);
+    }
+    vTaskDelay(pdMS_TO_TICKS(1000)); // Jede Sekunde neue Zeit holen
+  }
+}
+
+// --- Scroll-Task ---
+void scrollTask(void *pvParameters) {
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+
+  while(1) {
+    if(xSemaphoreTake(xLEDMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+      // Update Laufschrift
+      bool upperDone = upperScrollingMsg.UpdateText();
+      bool lowerDone = lowerScrollingMsg.UpdateText();
+      FastLED.show();
+      xSemaphoreGive(xLEDMutex);
+
+      // Wenn Laufschrift zu Ende UND ein Update steht an, dann Text wechseln
+      if (upperDone && upperNeedsUpdate) {
+        updateText(nextUpperText, (const char*)lowerTextBuffer); // Nur obere Zeile aktualisieren
+        upperNeedsUpdate = false;
+      }
+      if (lowerDone && lowerNeedsUpdate) {
+        updateText((const char*)upperTextBuffer, nextLowerText); // Nur untere Zeile aktualisieren
+        lowerNeedsUpdate = false;
+      }
+    }
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(30)); // ~33 FPS
+  }
+}
 
 void setup() {
   Serial.begin(115200);
-  
-  // LED Matrix Setup für beide Panels
+
+  // LED Matrix Initialisierung
   FastLED.addLeds<CHIPSET, LED_PIN_UPPER, COLOR_ORDER>(upperMatrix[0], upperMatrix.Size());
   FastLED.addLeds<CHIPSET, LED_PIN_LOWER, COLOR_ORDER>(lowerMatrix[0], lowerMatrix.Size());
   FastLED.setBrightness(10);
   FastLED.clear(true);
-  
-  // Initialisiere die Laufschrift für das obere Panel (Uhrzeit)
+
+  // Text Scroller Konfiguration
   upperScrollingMsg.SetFont(MatriseFontData);
   upperScrollingMsg.Init(&upperMatrix, upperMatrix.Width(), upperScrollingMsg.FontHeight() + 1, 1, 0);
-  upperScrollingMsg.SetScrollDirection(SCROLL_LEFT); // Von rechts nach links für umgedrehtes Panel
-  upperScrollingMsg.SetTextDirection(SCROLL_LEFT);   // Text Richtung umkehren
-  upperScrollingMsg.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0x00, 0xff, 0xff); // Farbe: Cyan
-  
-  // Initialisiere die Laufschrift für das untere Panel (Datum)
+  upperScrollingMsg.SetScrollDirection(SCROLL_LEFT);
+  upperScrollingMsg.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0x00, 0xff, 0xff); // Cyan
+
   lowerScrollingMsg.SetFont(MatriseFontData);
   lowerScrollingMsg.Init(&lowerMatrix, lowerMatrix.Width(), lowerScrollingMsg.FontHeight() + 1, 0, 0);
-  lowerScrollingMsg.SetScrollDirection(SCROLL_LEFT);  // Normal von links nach rechts
-  lowerScrollingMsg.SetTextDirection(SCROLL_LEFT);    // Normal
-  lowerScrollingMsg.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0xff, 0x80, 0x00); // Farbe: Orange
-  
-  // Starttexte
-  strcpy((char*)upperTextBuffer, "      Verbinde mit WLAN...");
-  strcpy((char*)lowerTextBuffer, "      Verbinde mit WLAN...");
-  upperTextLength = strlen((char*)upperTextBuffer);
-  lowerTextLength = strlen((char*)lowerTextBuffer);
-  upperScrollingMsg.SetText(upperTextBuffer, upperTextLength);
-  lowerScrollingMsg.SetText(lowerTextBuffer, lowerTextLength);
-  
-  // WLAN verbinden
-  WiFi.begin(ssid, password);
+  lowerScrollingMsg.SetScrollDirection(SCROLL_LEFT);
+  lowerScrollingMsg.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0xff, 0x80, 0x00); // Orange
+
+  // Mutexe erstellen
+  xTextMutex = xSemaphoreCreateMutex();
+  xLEDMutex = xSemaphoreCreateMutex();
+
+  // Starttext setzen
+  updateText("      Verbinde mit WLAN...", "      Verbinde mit WLAN...");
+
+  // WLAN verbinden mit Timeout
   Serial.print("Verbinde mit WLAN");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+  WiFi.begin(ssid, password);
+  unsigned long wifiTimeout = millis();
+  while (WiFi.status() != WL_CONNECTED && (millis() - wifiTimeout < 20000)) {
+    delay(250);
     Serial.print(".");
-    // LED-Matrix aktualisieren, während wir auf WLAN warten
-    updateScrollText();
-    FastLED.show();
+  }
+  if(WiFi.status() != WL_CONNECTED) {
+    Serial.println("\nWiFi-Timeout! Starte neu...");
+    updateText("      WLAN-Fehler!", "      Kein Netz!");
+    delay(3000);
+    ESP.restart();
   }
   Serial.println("\nWLAN verbunden!");
-  
-  // Zeit von NTP-Server holen
+
+  // NTP konfigurieren
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  
-  // Text mit Begrüßung setzen
-  strcpy((char*)upperTextBuffer, "      System bereit!");
-  strcpy((char*)lowerTextBuffer, "      System bereit!");
-  upperTextLength = strlen((char*)upperTextBuffer);
-  lowerTextLength = strlen((char*)lowerTextBuffer);
-  upperScrollingMsg.SetText(upperTextBuffer, upperTextLength);
-  lowerScrollingMsg.SetText(lowerTextBuffer, lowerTextLength);
-  
-  // Berechne die ungefähre Breite der Texte
-  upperTextWidth = upperTextLength * 6;
-  lowerTextWidth = lowerTextLength * 6;
+
+  // Begrüßungstext
+  updateText("      System bereit!", "      System bereit!");
+
+  // RTOS Tasks erstellen
+  xTaskCreatePinnedToCore(
+    timeTask, "TimeTask", TASK_STACK_SIZE, NULL, PRIO_HIGH, &xTimeTaskHandle, 1
+  );
+  xTaskCreatePinnedToCore(
+    scrollTask, "ScrollTask", TASK_STACK_SIZE, NULL, PRIO_NORMAL, &xScrollTaskHandle, 0
+  );
 }
 
 void loop() {
-  unsigned long currentMillis = millis();
-  
-  // Zeit aktualisieren (jede Sekunde)
-  if (currentMillis - lastTimeUpdate >= timeUpdateInterval) {
-    lastTimeUpdate = currentMillis;
-    updateTimeDisplay();
-  }
-  
-  // Text scrollen
-  if (currentMillis - lastScrollUpdate >= scrollUpdateInterval) {
-    lastScrollUpdate = currentMillis;
-    updateScrollText();
-  }
-  
-  // Zeige die aktualisierte Matrix an
-  FastLED.show();
-  
-  // Wenn ein Update des Textes notwendig ist
-  if (textNeedsUpdate) {
-    updateCompleteDisplay();
-    textNeedsUpdate = false;
-  }
-}
-
-void updateScrollText() {
-  // Update oberes Panel (Uhrzeit)
-  upperScrollingMsg.UpdateText();
-  upperScrollCount++;
-  
-  // Wenn der Text komplett durchgelaufen ist
-  if (upperScrollCount >= (upperTextWidth + MATRIX_WIDTH - 35)) {
-    upperScrollCount = 0;
-    upperScrollingMsg.SetText(upperTextBuffer, upperTextLength);
-  }
-  
-  // Update unteres Panel (Datum)
-  lowerScrollingMsg.UpdateText();
-  lowerScrollCount++;
-  
-  // Wenn der Text komplett durchgelaufen ist
-  if (lowerScrollCount >= (lowerTextWidth + MATRIX_WIDTH - 40)) {
-    lowerScrollCount = 0;
-    lowerScrollingMsg.SetText(lowerTextBuffer, lowerTextLength);
-  }
-}
-
-void updateTimeDisplay() {
-  struct tm timeInfo;
-  if (getLocalTime(&timeInfo)) {
-    // Markiere, dass wir ein Update des Textes benötigen
-    textNeedsUpdate = true;
-  }
-}
-
-void updateCompleteDisplay() {
-  // Aktuelle Zeit holen
-  struct tm timeInfo;
-  if (!getLocalTime(&timeInfo)) {
-    Serial.println("Fehler beim Abrufen der Zeit");
-    return;
-  }
-  
-  // Text für oberes Panel (Uhrzeit) formatieren
-  char timeText[75];
-  sprintf(timeText, "      %02d:%02d:%02d", 
-          timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
-  
-  // Text für unteres Panel (Datum) formatieren
-  char dateText[75];
-  sprintf(dateText, "      %02d.%02d.%04d",
-          timeInfo.tm_mday, timeInfo.tm_mon + 1, timeInfo.tm_year + 1900);
-  
-  // Texte für LED-Matrizen setzen
-  strcpy((char*)upperTextBuffer, timeText);
-  strcpy((char*)lowerTextBuffer, dateText);
-  upperTextLength = strlen((char*)upperTextBuffer);
-  lowerTextLength = strlen((char*)lowerTextBuffer);
-  
-  // Berechne die ungefähre Breite der Texte
-  upperTextWidth = upperTextLength * 6;
-  lowerTextWidth = lowerTextLength * 6;
-  
-  // Texte nur neu setzen, wenn wir am Anfang des Scrolls sind
-  if (upperScrollCount < 5) {
-    upperScrollingMsg.SetText(upperTextBuffer, upperTextLength);
-    upperScrollCount = 0;
-  }
-  
-  if (lowerScrollCount < 5) {
-    lowerScrollingMsg.SetText(lowerTextBuffer, lowerTextLength);
-    lowerScrollCount = 0;
-  }
+  vTaskDelete(NULL); // FreeRTOS übernimmt alles!
 }

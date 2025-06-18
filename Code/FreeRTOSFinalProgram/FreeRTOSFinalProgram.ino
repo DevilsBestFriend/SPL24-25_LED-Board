@@ -67,11 +67,14 @@ const byte font5x7[][5] = {
 #define SENSOR_TYP DHT22
 
 // WLAN-Zugangsdaten
-const char* wlanName = "zTLatte";
-const char* wlanPasswort = "yfbk69420";
+const char* wlanName = "iPhone von Hendrik";
+const char* wlanPasswort = "hst123456";
 
 // NTP-Server
-const char* ntpServer = "pool.ntp.org";
+const char* ntpServer = "162.159.200.1"; // IP von pool.ntp.org
+char clockTopText[32] = "  Lade Uhrzeit...";   // Uhrzeit
+char clockBottomText[32] = "  Lade Datum...";  // Datum
+static int clockScrollOffset = MATRIX_WIDTH;
 const long gmtOffset_sec = 3600; // GMT+1
 const int daylightOffset_sec = 3600; // Sommerzeit
 
@@ -309,10 +312,10 @@ void googleSheetsTask(void* pv) {
       int len2 = strlen(text2);
 
       for (int i = 0; i < len1; i++) {
-        drawChar5x7(i*6-, 0, text[i], CRGB::White);  // y=0: untere Hälfte
+        drawChar5x7(i*6, 0, text[i], CRGB::White);  // y=0: untere Hälfte
       }
       for (int i = 0; i < len2; i++) {
-        drawChar5x7(i*6-, 8, text2[i], CRGB::White);  // y=8: obere Hälfte
+        drawChar5x7(i*6, 8, text2[i], CRGB::White);  // y=8: obere Hälfte
       }
       FastLED.show();
 
@@ -338,7 +341,7 @@ void joystickTask(void* pv) {
   while (1) {
     bool currentState = digitalRead(JOYSTICK_BUTTON_PIN);
     if (lastState == HIGH && currentState == LOW) {
-      currentTask = (currentTask + 1) % 3;
+    currentTask = (currentTask + 1) % 4;
       Serial.print("Wechsle zu Task ");
       Serial.println(currentTask);
       delay(200);  // Entprellung
@@ -460,8 +463,65 @@ void weatherTask(void* pv) {
   }
 }
 
+// Vierter Task
+void clockTask(void* pv) {
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  static unsigned long lastNtpUpdate = 0;
+
+  while (true) {
+    if (currentTask == 3) {
+      unsigned long now = millis();
+
+      if (now - lastNtpUpdate > 60000 || lastNtpUpdate == 0) {
+        struct tm timeInfo;
+        vTaskDelay(2000 / portTICK_PERIOD_MS); // kurz warten nach configTime
+        if (getLocalTime(&timeInfo)) {
+          strftime(clockTopText, sizeof(clockTopText), "  %H:%M:%S", &timeInfo);
+          strftime(clockBottomText, sizeof(clockBottomText), "  %d.%m.%Y", &timeInfo);
+
+          Serial.print("Neue Zeit: ");
+          Serial.println(clockTopText);
+          lastNtpUpdate = now;
+        } else {
+          Serial.println("NTP Fehler");
+        }
+      }
+
+      FastLED.clear();
+      int lenTop = strlen(clockTopText);
+      int lenBottom = strlen(clockBottomText);
+
+      for (int i = 0; i < lenTop; i++) {
+        drawChar5x7(clockScrollOffset + i * 6, 8, clockTopText[i], CRGB::White);
+      }
+      for (int i = 0; i < lenBottom; i++) {
+        drawChar5x7(clockScrollOffset + i * 6, 0, clockBottomText[i], CRGB::Orange);
+      }
+
+      FastLED.show();
+
+      clockScrollOffset--;
+      if (clockScrollOffset < -lenTop * 6) clockScrollOffset = MATRIX_WIDTH;
+
+      vTaskDelay(30 / portTICK_PERIOD_MS);
+    } else {
+      clockScrollOffset = MATRIX_WIDTH;
+      vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+  }
+}
 
 
+void wlanWatcherTask(void* pv) {
+  while (true) {
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("WLAN verloren! Reconnect...");
+      WiFi.disconnect();
+      WiFi.begin(wlanName, wlanPasswort);
+    }
+    vTaskDelay(5000 / portTICK_PERIOD_MS);  // alle 5 Sekunden prüfen
+  }
+}
 
 
 
@@ -488,12 +548,16 @@ void setup() {
   temperaturSensor.starten();
   initGame();
 
+  xTaskCreatePinnedToCore(wlanWatcherTask, "WLAN-Watcher", 2048, NULL, 1, NULL, 0);
   xTaskCreatePinnedToCore(snakeTask, "Snake", 4096, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(googleSheetsTask, "GoogleSheets", 4096, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(joystickTask, "Joystick", 2048, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(taskWLAN, "WLAN", 4096, NULL, 1, NULL, 0);
   xTaskCreatePinnedToCore(weatherTask, "Weather", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(clockTask, "Clock", 4096, NULL, 1, NULL, 1);
 }
 
 
-void loop() {}
+void loop() {
+  
+}

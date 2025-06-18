@@ -5,6 +5,9 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <DHT.h>
+#include <FontMatrise.h>
+#include <LEDText.h>
+#include "time.h"
 
 // LED Matrix Konfiguration
 #define NUM_LEDS_PER_STRIP 256
@@ -64,8 +67,13 @@ const byte font5x7[][5] = {
 #define SENSOR_TYP DHT22
 
 // WLAN-Zugangsdaten
-const char* wlanName = "iPhone von Hendrik";
-const char* wlanPasswort = "hst123456";
+const char* wlanName = "zTLatte";
+const char* wlanPasswort = "yfbk69420";
+
+// NTP-Server
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 3600; // GMT+1
+const int daylightOffset_sec = 3600; // Sommerzeit
 
 // Webhook-URL
 const char* webAppUrl = "https://script.google.com/macros/s/AKfycbw7HoXQEsoIS8YQ29FizEQhf903ahI2iOmNgdAKw1pcOHSjS4KIFGk_WvB23RArKvmC/exec";
@@ -289,22 +297,32 @@ void drawChar5x7(int x, int y, char c, CRGB color) {
 
 void googleSheetsTask(void* pv) {
   static int scrollOffset = MATRIX_WIDTH;
+  static unsigned long lastUpdate = millis();
 
   while (true) {
     if (currentTask == 1) {
       FastLED.clear();
 
-      const char* text = " GOOGLE SHEETS ";
-      int len = strlen(text);
+      const char* text = "GOOGLE";
+      const char* text2 = "SHEETS";
+      int len1 = strlen(text);
+      int len2 = strlen(text2);
 
-      for (int i = 0; i < len; i++) {
-        drawChar5x7(scrollOffset + i * 6, 0, text[i], CRGB::White);  // y=0: untere Hälfte
+      for (int i = 0; i < len1; i++) {
+        drawChar5x7(i*6-, 0, text[i], CRGB::White);  // y=0: untere Hälfte
       }
-
+      for (int i = 0; i < len2; i++) {
+        drawChar5x7(i*6-, 8, text2[i], CRGB::White);  // y=8: obere Hälfte
+      }
       FastLED.show();
 
-      scrollOffset--;
-      if (scrollOffset < -len * 6) scrollOffset = MATRIX_WIDTH;
+      if (millis() - lastUpdate > 2000) {
+        lastUpdate = millis();
+        scrollOffset--;
+        if (scrollOffset < -len1 * 6) scrollOffset = MATRIX_WIDTH;
+      }
+      float temperatur = temperaturSensor.leseTemperatur();
+      sendeDaten(temperatur);
 
       vTaskDelay(30 / portTICK_PERIOD_MS);  // ca. 33 FPS → flüssig & lesbar
     } else {
@@ -478,6 +496,4 @@ void setup() {
 }
 
 
-void loop() {
-  // leer
-}
+void loop() {}
